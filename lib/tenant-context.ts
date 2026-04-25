@@ -4,8 +4,11 @@ export type TenantContext = {
   id: string;
   slug: string;
   name: string;
+  custom_domain: string | null;
   primary_color: string | null;
   logo_url: string | null;
+  payment_mode: "edge_payments" | "byo_stripe";
+  payment_application_fee_percent: number;
 };
 
 function normalizeTenantSlug(value: string | null): string | null {
@@ -21,7 +24,7 @@ export async function resolveTenantBySlug(slug: string | null): Promise<TenantCo
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("tenants")
-    .select("id,slug,name,primary_color,logo_url")
+    .select("id,slug,name,custom_domain,primary_color,logo_url,payment_mode,payment_application_fee_percent")
     .eq("slug", normalizedSlug)
     .maybeSingle();
 

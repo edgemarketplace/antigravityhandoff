@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { AdminProductsManager } from "@/components/AdminProductsManager";
 import { RealtimeOrdersPanel } from "@/components/RealtimeOrdersPanel";
+import { AdminSettingsPanel } from "@/components/AdminSettingsPanel";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { resolveTenantBySlug } from "@/lib/tenant-context";
 import { ADMIN_READ_ROLES, requireTenantMembership } from "@/lib/admin-auth";
@@ -106,6 +107,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   const initialOrders = (orders ?? []) as OrderRow[];
 
+  const initialSettings = {
+    name: tenant.name,
+    slug: tenant.slug,
+    custom_domain: tenant.custom_domain ?? "",
+    primary_color: tenant.primary_color ?? "",
+    logo_url: tenant.logo_url ?? "",
+    payment_mode: tenant.payment_mode,
+    payment_application_fee_percent: Number(tenant.payment_application_fee_percent ?? 1),
+  };
+
   return (
     <main className="mx-auto w-full max-w-7xl space-y-8 px-6 py-8 md:px-10">
       <header className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
@@ -128,6 +139,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <AdminProductsManager tenantSlug={tenant.slug} initialProducts={initialProducts} />
         <RealtimeOrdersPanel tenantId={tenant.id} tenantSlug={tenant.slug} initialOrders={initialOrders} />
       </div>
+
+      <AdminSettingsPanel tenantSlug={tenant.slug} initialSettings={initialSettings} />
     </main>
   );
 }
