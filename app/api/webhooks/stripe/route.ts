@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { createPrintifyOrder } from "@/lib/printify";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { recordPaidOrderUsage } from "@/lib/usage-tracking";
 
 function splitName(fullName?: string | null) {
   if (!fullName) {
@@ -115,6 +116,7 @@ async function markOrderPaid(session: Stripe.Checkout.Session) {
   const { error } = await supabase.from("orders").upsert(
     {
       id: orderId,
+      tenant_id: session.metadata?.tenant_id ?? null,
       stripe_session_id: session.id,
       customer_email: session.customer_details?.email ?? null,
       shipping_address: shipping.address ?? null,
@@ -134,6 +136,17 @@ async function markOrderPaid(session: Stripe.Checkout.Session) {
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const orderId = await markOrderPaid(session);
+
+  const tenantId = session.metadata?.tenant_id;
+  if (tenantId) {
+    const amountCents = typeof session.amount_total === "number" ? session.amount_total : 0;
+    await recordPaidOrderUsage({
+      tenantId,
+      orderId,
+      amountCents,
+    });
+  }
+
   const line_items = await mapPrintifyLineItems(session.id);
   const address_to = assertAddress(session);
 
