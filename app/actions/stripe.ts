@@ -21,6 +21,25 @@ type ProductVariant = {
   is_enabled?: boolean;
 };
 
+type TenantPaymentMode = "edge_payments" | "byo_stripe";
+
+type TenantPaymentSettings = {
+  paymentMode: TenantPaymentMode;
+  applicationFeePercent: number;
+  connectedAccountRef: string | null;
+  connectedAccountStatus: string | null;
+};
+
+type PaymentAccountRow = {
+  account_ref: string;
+  status: string;
+};
+
+type CheckoutSessionCreateParams = NonNullable<
+  Parameters<ReturnType<typeof getStripe>["checkout"]["sessions"]["create"]>[0]
+>;
+type CheckoutPaymentIntentData = NonNullable<CheckoutSessionCreateParams["payment_intent_data"]>;
+
 type ValidatedCartItem = CartItem & {
   printifyProductId: string;
   unitPrice: number;
@@ -87,6 +106,99 @@ function variantPriceDollars(variants: ProductVariant[], variantId: number): num
   if (match.is_enabled === false) return null;
 
   return Number((match.price / 100).toFixed(2));
+}
+
+function normalizePaymentMode(value: unknown): TenantPaymentMode {
+  return value === "byo_stripe" ? "byo_stripe" : "edge_payments";
+}
+
+function normalizeApplicationFeePercent(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return 0;
+  if (parsed <= 0) return 0;
+  if (parsed >= 100) return 100;
+  return Number(parsed.toFixed(2));
+}
+
+async function resolveTenantPaymentSettings(tenantId: string): Promise<TenantPaymentSettings> {
+  const supabase = getSupabaseAdminClient();
+
+  const { data: tenant, error: tenantError } = await supabase
+    .from("tenants")
+    .select("payment_mode,payment_application_fee_percent")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  if (tenantError || !tenant) {
+    throw new Error(`Could not resolve tenant payment settings: ${tenantError?.message ?? "tenant not found"}`);
+  }
+
+  const paymentMode = normalizePaymentMode(tenant.payment_mode);
+  const applicationFeePercent = normalizeApplicationFeePercent(tenant.payment_application_fee_percent);
+
+  const { data: accounts, error: accountError } = await supabase
+    .from("payment_accounts")
+    .select("account_ref,status")
+    .eq("tenant_id", tenantId)
+    .eq("provider", "stripe_connect")
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  if (accountError) {
+    throw new Error(`Could not resolve tenant payment account: ${accountError.message}`);
+  }
+
+  const rows = ((accounts ?? []) as PaymentAccountRow[]).filter((row) => Boolean(row.account_ref));
+  const active = rows.find((row) => row.status === "active") ?? null;
+  const latest = rows[0] ?? null;
+
+  return {
+    paymentMode,
+    applicationFeePercent,
+    connectedAccountRef: active?.account_ref ?? latest?.account_ref ?? null,
+    connectedAccountStatus: active?.status ?? latest?.status ?? null,
+  };
+}
+
+function buildPaymentIntentData(
+  settings: TenantPaymentSettings,
+  amountTotalCents: number,
+): CheckoutPaymentIntentData | undefined {
+  if (!settings.connectedAccountRef) {
+    if (settings.paymentMode === "byo_stripe") {
+      throw new Error("BYO Stripe mode requires a connected Stripe account. Complete onboarding in Admin > Settings.");
+    }
+
+    return undefined;
+  }
+
+  if (settings.paymentMode === "byo_stripe") {
+    if (settings.connectedAccountStatus !== "active") {
+      throw new Error("BYO Stripe mode requires an active Stripe Connect account.");
+    }
+
+    return {
+      transfer_data: {
+        destination: settings.connectedAccountRef,
+      },
+    };
+  }
+
+  if (settings.connectedAccountStatus !== "active") {
+    return undefined;
+  }
+
+  const applicationFeeAmount = Math.max(
+    0,
+    Math.min(amountTotalCents, Math.round((amountTotalCents * settings.applicationFeePercent) / 100)),
+  );
+
+  return {
+    transfer_data: {
+      destination: settings.connectedAccountRef,
+    },
+    ...(applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {}),
+  };
 }
 
 async function validateAndHydrateCartItems(items: CartItem[]): Promise<{ tenantId: string; items: ValidatedCartItem[] }> {
@@ -179,9 +291,11 @@ export async function createEmbeddedCheckoutSession(input: CreateEmbeddedCheckou
   }
 
   const { tenantId, items } = await validateAndHydrateCartItems(input.items);
+  const paymentSettings = await resolveTenantPaymentSettings(tenantId);
 
   const orderId = randomUUID();
   const amountTotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const amountTotalCents = items.reduce((sum, item) => sum + Math.round(item.unitPrice * 100) * item.quantity, 0);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   const supabase = getSupabaseAdminClient();
@@ -204,7 +318,7 @@ export async function createEmbeddedCheckoutSession(input: CreateEmbeddedCheckou
 
   const stripe = getStripe();
 
-  const session = await stripe.checkout.sessions.create({
+  const sessionParams: CheckoutSessionCreateParams = {
     mode: "payment",
     ui_mode: "embedded_page",
     return_url: `${appUrl}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
@@ -216,8 +330,17 @@ export async function createEmbeddedCheckoutSession(input: CreateEmbeddedCheckou
     metadata: {
       order_id: orderId,
       tenant_id: tenantId,
+      payment_mode: paymentSettings.paymentMode,
+      connected_account_ref: paymentSettings.connectedAccountRef ?? "",
     },
-  });
+  };
+
+  const paymentIntentData = buildPaymentIntentData(paymentSettings, amountTotalCents);
+  if (paymentIntentData) {
+    sessionParams.payment_intent_data = paymentIntentData;
+  }
+
+  const session = await stripe.checkout.sessions.create(sessionParams);
 
   if (!session.client_secret) {
     throw new Error("Stripe session did not return a client secret.");
