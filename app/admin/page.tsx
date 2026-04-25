@@ -4,6 +4,7 @@ import { AdminProductsManager } from "@/components/AdminProductsManager";
 import { RealtimeOrdersPanel } from "@/components/RealtimeOrdersPanel";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { resolveTenantBySlug } from "@/lib/tenant-context";
+import { ADMIN_READ_ROLES, requireTenantMembership } from "@/lib/admin-auth";
 
 type AdminPageProps = {
   searchParams: Promise<{ tenant?: string }>;
@@ -68,6 +69,18 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     );
   }
 
+  const authRequest = new Request("http://localhost/admin", { headers: new Headers(headerStore) });
+  const auth = await requireTenantMembership(authRequest, tenant.id, ADMIN_READ_ROLES);
+
+  if (!auth.ok) {
+    return (
+      <main className="mx-auto w-full max-w-5xl space-y-4 px-6 py-8 md:px-10">
+        <h1 className="text-3xl font-semibold tracking-tight">Admin</h1>
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">{auth.message}</p>
+      </main>
+    );
+  }
+
   const supabase = getSupabaseAdminClient();
 
   const [{ data: products }, { data: orders }] = await Promise.all([
@@ -100,6 +113,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">{tenant.name}</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
           Slug: <code>{tenant.slug}</code>
+        </p>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Signed in as {auth.user.email ?? auth.user.id} ({auth.membership.role})
         </p>
         <div className="mt-4">
           <Link href={`/stores/${tenant.slug}`} className="text-sm text-orange-600 underline underline-offset-4 dark:text-orange-300">
