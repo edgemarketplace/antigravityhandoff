@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import { centsToUsd, getFeeNudge, getGrowthPlanComparison, getProjectedFreePlanFee } from "@/lib/smart-upgrade";
 
 type AdminFeeTrackerCardProps = {
@@ -18,6 +21,35 @@ export function AdminFeeTrackerCard({
 }: AdminFeeTrackerCardProps) {
   const nudge = getFeeNudge(monthlyFeeCents);
   const projectedFeeCents = getProjectedFreePlanFee(monthlyGmvCents);
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+
+  async function startUpgradeCheckout() {
+    setIsUpgrading(true);
+    setUpgradeError(null);
+
+    try {
+      const response = await fetch(`/api/admin/billing/upgrade/start?tenant=${encodeURIComponent(tenantSlug)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+
+      const payload = (await response.json()) as {
+        success: boolean;
+        message?: string;
+        checkout_url?: string;
+      };
+
+      if (!response.ok || !payload.success || !payload.checkout_url) {
+        throw new Error(payload.message ?? "Could not start Growth checkout.");
+      }
+
+      window.location.href = payload.checkout_url;
+    } catch (error) {
+      setUpgradeError(error instanceof Error ? error.message : "Could not start Growth checkout.");
+      setIsUpgrading(false);
+    }
+  }
 
   const nudgeToneClass =
     nudge.level === "urgent"
@@ -56,14 +88,23 @@ export function AdminFeeTrackerCard({
           <p className="text-xs text-orange-800 dark:text-orange-300">
             At current GMV pace, projected free-plan fee is <strong>{centsToUsd(projectedFeeCents)}</strong> this month.
           </p>
-          <div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={isUpgrading}
+              onClick={startUpgradeCheckout}
+              className="rounded-lg bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isUpgrading ? "Opening checkout..." : "Upgrade to Growth"}
+            </button>
             <Link
               href={`/admin?tenant=${encodeURIComponent(tenantSlug)}#upgrade-growth`}
               className="text-sm font-medium text-orange-700 underline underline-offset-4 dark:text-orange-300"
             >
-              Upgrade and keep more →
+              Open billing settings
             </Link>
           </div>
+          {upgradeError ? <p className="text-xs text-red-700 dark:text-red-300">{upgradeError}</p> : null}
         </div>
       ) : (
         <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">

@@ -63,8 +63,7 @@ async function mapPrintifyLineItems(sessionId: string) {
 
   const mapped = lineItems.data
     .map((lineItem) => {
-      const product =
-        lineItem.price && typeof lineItem.price.product === "object" ? lineItem.price.product : null;
+      const product = lineItem.price && typeof lineItem.price.product === "object" ? lineItem.price.product : null;
 
       const productMetadata = product && "deleted" in product ? null : product?.metadata;
 
@@ -134,7 +133,106 @@ async function markOrderPaid(session: Stripe.Checkout.Session) {
   return orderId;
 }
 
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+async function resolveTenantIdFromSubscription(subscription: Stripe.Subscription): Promise<string | null> {
+  const fromMetadata = subscription.metadata?.tenant_id?.trim();
+  if (fromMetadata) {
+    return fromMetadata;
+  }
+
+  const supabase = getSupabaseAdminClient();
+
+  const { data: bySubscription } = await supabase
+    .from("tenants")
+    .select("id")
+    .eq("stripe_subscription_id", subscription.id)
+    .maybeSingle();
+
+  if (bySubscription?.id) {
+    return bySubscription.id as string;
+  }
+
+  const customerId = typeof subscription.customer === "string" ? subscription.customer : null;
+  if (!customerId) {
+    return null;
+  }
+
+  const { data: byCustomer } = await supabase
+    .from("tenants")
+    .select("id")
+    .eq("stripe_customer_id", customerId)
+    .maybeSingle();
+
+  return (byCustomer?.id as string | undefined) ?? null;
+}
+
+async function setTenantPlanFromSubscription(params: {
+  tenantId: string;
+  customerId: string | null;
+  subscriptionId: string;
+  isGrowthActive: boolean;
+}) {
+  const supabase = getSupabaseAdminClient();
+
+  const updates: Record<string, unknown> = {
+    current_plan: params.isGrowthActive ? "growth" : "free",
+    stripe_subscription_id: params.isGrowthActive ? params.subscriptionId : null,
+    plan_updated_at: new Date().toISOString(),
+    growth_plan_activated_at: params.isGrowthActive ? new Date().toISOString() : null,
+  };
+
+  if (params.customerId) {
+    updates.stripe_customer_id = params.customerId;
+  }
+
+  const { error } = await supabase.from("tenants").update(updates).eq("id", params.tenantId);
+
+  if (error) {
+    throw new Error(`Could not sync tenant subscription state: ${error.message}`);
+  }
+}
+
+function isGrowthSubscriptionActive(status: Stripe.Subscription.Status): boolean {
+  return status === "active" || status === "trialing" || status === "past_due" || status === "unpaid";
+}
+
+async function handleGrowthUpgradeCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const tenantId = session.metadata?.tenant_id?.trim();
+  if (!tenantId) {
+    throw new Error("Growth upgrade checkout is missing tenant_id metadata.");
+  }
+
+  const subscriptionId = typeof session.subscription === "string" ? session.subscription : null;
+  if (!subscriptionId) {
+    throw new Error("Growth upgrade checkout is missing subscription id.");
+  }
+
+  const customerId = typeof session.customer === "string" ? session.customer : null;
+
+  await setTenantPlanFromSubscription({
+    tenantId,
+    customerId,
+    subscriptionId,
+    isGrowthActive: true,
+  });
+}
+
+async function handleSubscriptionLifecycleEvent(subscription: Stripe.Subscription) {
+  const tenantId = await resolveTenantIdFromSubscription(subscription);
+  if (!tenantId) {
+    return;
+  }
+
+  const customerId = typeof subscription.customer === "string" ? subscription.customer : null;
+
+  await setTenantPlanFromSubscription({
+    tenantId,
+    customerId,
+    subscriptionId: subscription.id,
+    isGrowthActive: isGrowthSubscriptionActive(subscription.status),
+  });
+}
+
+async function handleCommerceCheckoutCompleted(session: Stripe.Checkout.Session) {
   const orderId = await markOrderPaid(session);
 
   const tenantId = session.metadata?.tenant_id;
@@ -217,7 +315,18 @@ export async function POST(request: Request) {
 
   try {
     if (event.type === "checkout.session.completed") {
-      await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+      const session = event.data.object as Stripe.Checkout.Session;
+      const isGrowthUpgrade = session.mode === "subscription" || session.metadata?.checkout_type === "growth_upgrade";
+
+      if (isGrowthUpgrade) {
+        await handleGrowthUpgradeCheckoutCompleted(session);
+      } else {
+        await handleCommerceCheckoutCompleted(session);
+      }
+    }
+
+    if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
+      await handleSubscriptionLifecycleEvent(event.data.object as Stripe.Subscription);
     }
 
     return NextResponse.json({ received: true });
