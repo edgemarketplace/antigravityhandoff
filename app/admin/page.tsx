@@ -11,6 +11,11 @@ type AdminPageProps = {
   searchParams: Promise<{ tenant?: string }>;
 };
 
+type PaymentAccountRow = {
+  account_ref: string;
+  status: string;
+};
+
 type ProductRow = {
   printify_id: string;
   title: string;
@@ -84,7 +89,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   const supabase = getSupabaseAdminClient();
 
-  const [{ data: products }, { data: orders }] = await Promise.all([
+  const [{ data: products }, { data: orders }, { data: paymentAccount }] = await Promise.all([
     supabase
       .from("products")
       .select("printify_id,title,description,price,image_url,variants,created_at")
@@ -98,6 +103,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       .eq("tenant_id", tenant.id)
       .order("created_at", { ascending: false })
       .limit(25),
+    supabase
+      .from("payment_accounts")
+      .select("account_ref,status")
+      .eq("tenant_id", tenant.id)
+      .eq("provider", "stripe_connect")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const initialProducts = ((products ?? []) as ProductRow[]).map((product) => ({
@@ -106,6 +119,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   }));
 
   const initialOrders = (orders ?? []) as OrderRow[];
+  const paymentAccountState = (paymentAccount ?? null) as PaymentAccountRow | null;
 
   const initialSettings = {
     name: tenant.name,
@@ -140,7 +154,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <RealtimeOrdersPanel tenantId={tenant.id} tenantSlug={tenant.slug} initialOrders={initialOrders} />
       </div>
 
-      <AdminSettingsPanel tenantSlug={tenant.slug} initialSettings={initialSettings} />
+      <AdminSettingsPanel
+        tenantSlug={tenant.slug}
+        initialSettings={initialSettings}
+        initialStripeAccountRef={paymentAccountState?.account_ref ?? null}
+        initialStripeAccountStatus={paymentAccountState?.status ?? null}
+      />
     </main>
   );
 }

@@ -18,11 +18,21 @@ type SettingsState = {
 type AdminSettingsPanelProps = {
   tenantSlug: string;
   initialSettings: SettingsState;
+  initialStripeAccountRef: string | null;
+  initialStripeAccountStatus: string | null;
 };
 
-export function AdminSettingsPanel({ tenantSlug, initialSettings }: AdminSettingsPanelProps) {
+export function AdminSettingsPanel({
+  tenantSlug,
+  initialSettings,
+  initialStripeAccountRef,
+  initialStripeAccountStatus,
+}: AdminSettingsPanelProps) {
   const [form, setForm] = useState<SettingsState>(initialSettings);
   const [isSaving, setIsSaving] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [stripeAccountRef, setStripeAccountRef] = useState<string | null>(initialStripeAccountRef);
+  const [stripeAccountStatus, setStripeAccountStatus] = useState<string | null>(initialStripeAccountStatus);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,6 +86,42 @@ export function AdminSettingsPanel({ tenantSlug, initialSettings }: AdminSetting
       setError(reason);
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function launchConnect(endpoint: "/api/admin/payments/connect/start" | "/api/admin/payments/connect/refresh") {
+    setIsConnecting(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`${endpoint}?tenant=${tenantSlug}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+
+      const payload = (await response.json()) as {
+        success: boolean;
+        message?: string;
+        account_id?: string;
+        account_status?: string;
+        onboarding_url?: string;
+      };
+
+      if (!response.ok || !payload.success || !payload.onboarding_url) {
+        throw new Error(payload.message ?? "Could not start Stripe Connect onboarding.");
+      }
+
+      setStripeAccountRef(payload.account_id ?? stripeAccountRef);
+      setStripeAccountStatus(payload.account_status ?? stripeAccountStatus);
+      setMessage("Stripe Connect onboarding link generated.");
+
+      window.open(payload.onboarding_url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "Could not start Stripe Connect onboarding.";
+      setError(reason);
+    } finally {
+      setIsConnecting(false);
     }
   }
 
@@ -179,6 +225,24 @@ export function AdminSettingsPanel({ tenantSlug, initialSettings }: AdminSetting
             className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
           />
         </label>
+
+        <div className="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-700">
+          <p className="font-medium text-zinc-900 dark:text-zinc-100">Stripe Connect</p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+            Account: <code>{stripeAccountRef ?? "not connected"}</code>
+          </p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+            Status: <code>{stripeAccountStatus ?? "pending"}</code>
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" disabled={isConnecting} onClick={() => launchConnect("/api/admin/payments/connect/start")}>
+              {isConnecting ? "Opening..." : "Start Connect onboarding"}
+            </Button>
+            <Button type="button" variant="outline" disabled={isConnecting || !stripeAccountRef} onClick={() => launchConnect("/api/admin/payments/connect/refresh")}>
+              Refresh onboarding link
+            </Button>
+          </div>
+        </div>
       </div>
 
       {message ? <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p> : null}
