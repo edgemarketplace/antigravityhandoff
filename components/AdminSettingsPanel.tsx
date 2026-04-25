@@ -126,7 +126,7 @@ export function AdminSettingsPanel({
   }
 
   return (
-    <section className="space-y-4 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+    <section id="upgrade-growth" className="space-y-4 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
       <div>
         <p className="text-xs tracking-[0.18em] text-zinc-500 uppercase">Admin settings</p>
         <h2 className="mt-1 text-xl font-semibold tracking-tight">Store profile + payments</h2>

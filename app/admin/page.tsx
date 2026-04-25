@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { AdminProductsManager } from "@/components/AdminProductsManager";
 import { RealtimeOrdersPanel } from "@/components/RealtimeOrdersPanel";
 import { AdminSettingsPanel } from "@/components/AdminSettingsPanel";
+import { AdminFeeTrackerCard } from "@/components/AdminFeeTrackerCard";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { resolveTenantBySlug } from "@/lib/tenant-context";
 import { ADMIN_READ_ROLES, requireTenantMembership } from "@/lib/admin-auth";
@@ -131,6 +132,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     payment_application_fee_percent: Number(tenant.payment_application_fee_percent ?? 1),
   };
 
+  const monthlyOrderCount = Number(tenant.monthly_order_count ?? 0);
+  const monthlyGmvCents = Number(tenant.monthly_gmv_cents ?? 0);
+  const monthlyFeeCents = Number(tenant.monthly_fee_cents ?? 0);
+  const currentPlan = tenant.current_plan ?? "free";
+
   return (
     <main className="mx-auto w-full max-w-7xl space-y-8 px-6 py-8 md:px-10">
       <header className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
@@ -148,6 +154,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           </Link>
         </div>
       </header>
+
+      <AdminFeeTrackerCard
+        tenantSlug={tenant.slug}
+        currentPlan={currentPlan}
+        monthlyOrderCount={monthlyOrderCount}
+        monthlyGmvCents={monthlyGmvCents}
+        monthlyFeeCents={monthlyFeeCents}
+      />
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <AdminProductsManager tenantSlug={tenant.slug} initialProducts={initialProducts} />
