@@ -79,18 +79,31 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-tenant-slug", tenant.slug);
+  if (tenant.tenantId) {
+    requestHeaders.set("x-tenant-id", tenant.tenantId);
+  }
+
   const url = request.nextUrl.clone();
+  const passthroughPaths = ["/admin"];
+  const shouldPassthrough = passthroughPaths.some(
+    (pathPrefix) => url.pathname === pathPrefix || url.pathname.startsWith(`${pathPrefix}/`),
+  );
+
+  if (shouldPassthrough) {
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+  }
+
   const alreadyTenantRouted = url.pathname.startsWith("/stores/");
 
   if (!alreadyTenantRouted) {
     const suffix = url.pathname === "/" ? "" : url.pathname;
     url.pathname = `/stores/${tenant.slug}${suffix}`;
-  }
-
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-tenant-slug", tenant.slug);
-  if (tenant.tenantId) {
-    requestHeaders.set("x-tenant-id", tenant.tenantId);
   }
 
   return NextResponse.rewrite(url, {

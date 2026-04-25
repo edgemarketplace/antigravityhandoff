@@ -54,14 +54,24 @@ TENANT_CUSTOM_DOMAIN_MAP={"acmestore.com":{"slug":"acme-corp","tenantId":"<uuid>
 
 ## Immediate next implementation targets
 
-1. Add protected `/admin` route group with tenant-scoped auth guard.
-2. Build tenant-aware Product CRUD + image uploads to Supabase Storage.
-3. Add real-time Orders table using Supabase Realtime subscriptions.
-4. Add Settings panel to edit `tenants.primary_color` + `tenants.logo_url`.
-5. Add tenant onboarding script/API:
+1. ✅ Add protected `/admin` route group with tenant-scoped guard (tenant header/query required).
+2. ✅ Build tenant-aware Product CRUD scaffolding.
+3. ✅ Add real-time Orders table using Supabase Realtime subscriptions.
+4. ⏳ Add Settings panel to edit `tenants.primary_color` + `tenants.logo_url`.
+5. ⏳ Add tenant onboarding script/API:
    - create tenant
    - create initial admin membership
    - optional Vercel custom domain registration
+
+## Next block completed (this iteration)
+
+- Added `app/admin/page.tsx` tenant admin dashboard scaffold.
+- Added `app/api/admin/products/route.ts` for tenant-scoped GET/POST/PATCH/DELETE.
+- Added `app/api/admin/orders/route.ts` for tenant-scoped order feed.
+- Added `components/AdminProductsManager.tsx` (CRUD UI).
+- Added `components/RealtimeOrdersPanel.tsx` (Supabase Realtime listener + table).
+- Added `lib/tenant-context.ts` for reusable tenant resolution.
+- Updated `proxy.ts` to **passthrough `/admin`** while still injecting tenant headers.
 
 ## Verification commands
 
