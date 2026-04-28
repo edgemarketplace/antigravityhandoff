@@ -31,10 +31,17 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Validate GCP secret is present
+        env:
+          GCP_SA_KEY_EDGE_MARKETPLACE_HUB: ${{ secrets.GCP_SA_KEY_EDGE_MARKETPLACE_HUB }}
+        run: |
+          test -n "$GCP_SA_KEY_EDGE_MARKETPLACE_HUB" || (echo "Missing secret GCP_SA_KEY_EDGE_MARKETPLACE_HUB" && exit 1)
+          echo "Secret detected (length=${#GCP_SA_KEY_EDGE_MARKETPLACE_HUB})"
+          
       - name: Google auth for Firebase CLI
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY_EDGE_MARKETPLACE_HUB }}
+          credentials_json: '${{ secrets.GCP_SA_KEY_EDGE_MARKETPLACE_HUB }}'
 
       - name: Deploy staging channel
         run: ./scripts/deploy-staging-channel.sh
@@ -69,10 +76,17 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Validate GCP secret is present
+        env:
+          GCP_SA_KEY_EDGE_MARKETPLACE_HUB: ${{ secrets.GCP_SA_KEY_EDGE_MARKETPLACE_HUB }}
+        run: |
+          test -n "$GCP_SA_KEY_EDGE_MARKETPLACE_HUB" || (echo "Missing secret GCP_SA_KEY_EDGE_MARKETPLACE_HUB" && exit 1)
+          echo "Secret detected (length=${#GCP_SA_KEY_EDGE_MARKETPLACE_HUB})"
+          
       - name: Google auth for Firebase CLI
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY_EDGE_MARKETPLACE_HUB }}
+          credentials_json: '${{ secrets.GCP_SA_KEY_EDGE_MARKETPLACE_HUB }}'
 
       - name: Promote staging to live
         run: ./scripts/promote-staging-to-live.sh
