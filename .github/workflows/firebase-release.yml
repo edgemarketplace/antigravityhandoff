@@ -1,0 +1,81 @@
+name: Firebase Release
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      promote_to_live:
+        description: "Promote staging channel to live after staging smoke test"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: edge-marketplace-hub
+      CHANNEL_ID: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Google auth for Firebase CLI
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY_EDGE_MARKETPLACE_HUB }}
+
+      - name: Deploy staging channel
+        run: ./scripts/deploy-staging-channel.sh
+
+      - name: Resolve staging URL
+        id: staging_url
+        run: |
+          URL=$(./node_modules/.bin/firebase hosting:channel:list --project "$PROJECT_ID" --json | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);const channels=j.result.channels||[];const c=channels.find(x=>x.name.endsWith("/channels/staging"));if(!c||!c.url){process.exit(1)};process.stdout.write(c.url);});')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Staging URL: $URL"
+
+      - name: Smoke test staging
+        env:
+          BASE_URL: ${{ steps.staging_url.outputs.url }}
+        run: ./scripts/smoke-test-prod.sh
+
+  promote:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_to_live == true }}
+    needs: staging
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: edge-marketplace-hub
+      SOURCE_CHANNEL: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Google auth for Firebase CLI
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY_EDGE_MARKETPLACE_HUB }}
+
+      - name: Promote staging to live
+        run: ./scripts/promote-staging-to-live.sh
+
+      - name: Smoke test live
+        run: ./scripts/smoke-test-prod.sh
