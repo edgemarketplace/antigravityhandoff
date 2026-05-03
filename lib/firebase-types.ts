@@ -26,6 +26,7 @@ export type TenantContext = {
 export type MembershipRow = {
   tenant_id: string;
   user_id: string;
+  email?: string;
   role: AdminRole;
 };
 

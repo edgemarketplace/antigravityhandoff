@@ -270,6 +270,13 @@ export async function runOnboardingProvisioning(intakeId: string) {
 
   await db.collection("tenants").doc(tenantId).set(tenant);
 
+  await db.collection("members").doc(`${tenantId}_${intake.admin_email}`).set({
+    tenant_id: tenantId,
+    user_id: intake.admin_email,
+    email: intake.admin_email,
+    role: "owner"
+  });
+
   const productRows: ProductRow[] = [];
   for (let index = 0; index < products.length; index += 1) {
     const product = products[index]!;

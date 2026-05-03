@@ -127,7 +127,7 @@ export async function requireTenantMembership(
     };
   }
 
-  const membership = await findMembership(tenantId, user.id);
+  const membership = await findMembership(tenantId, user.id, user.email);
 
   if (!membership) {
     return {

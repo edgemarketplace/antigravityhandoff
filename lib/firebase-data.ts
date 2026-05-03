@@ -42,7 +42,31 @@ export async function findTenantBySlug(slug: string): Promise<TenantContext | nu
   }
 }
 
-export async function findMembership(tenantId: string, userId: string): Promise<MembershipRow | null> {
+export async function findTenantById(id: string): Promise<TenantContext | null> {
+  try {
+    const doc = await collection<TenantContext>("tenants").doc(id).get();
+    if (!doc.exists) return null;
+    const data = doc.data();
+    if (!data) return null;
+
+    return {
+      ...data,
+      id: data.id ?? doc.id,
+      onboarding_progress: data.onboarding_progress ?? {},
+      payment_fee_percent: Number(data.payment_fee_percent ?? 5),
+      shipping_markup_percent: Number(data.shipping_markup_percent ?? 10),
+      monthly_order_count: Number(data.monthly_order_count ?? 0),
+      monthly_gmv_cents: Number(data.monthly_gmv_cents ?? 0),
+      monthly_fee_cents: Number(data.monthly_fee_cents ?? 0),
+      last_billing_reset: data.last_billing_reset ?? null,
+      onboarding_completed_at: data.onboarding_completed_at ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function findMembership(tenantId: string, userId: string, userEmail?: string | null): Promise<MembershipRow | null> {
   const byDocId = await collection<MembershipRow>("members").doc(`${tenantId}_${userId}`).get();
   if (byDocId.exists) {
     const row = byDocId.data();
@@ -55,8 +79,42 @@ export async function findMembership(tenantId: string, userId: string): Promise<
     .limit(1)
     .get();
 
-  if (snapshot.empty) return null;
-  return snapshot.docs[0].data();
+  if (!snapshot.empty) return snapshot.docs[0].data();
+
+  if (userEmail) {
+    const byEmailSnap = await collection<MembershipRow>("members")
+      .where("tenant_id", "==", tenantId)
+      .where("email", "==", userEmail)
+      .limit(1)
+      .get();
+    if (!byEmailSnap.empty) return byEmailSnap.docs[0].data();
+  }
+
+  return null;
+}
+
+export async function listUserMemberships(userId: string, userEmail?: string | null): Promise<MembershipRow[]> {
+  const memberships: MembershipRow[] = [];
+  const snapshot = await collection<MembershipRow>("members")
+    .where("user_id", "==", userId)
+    .get();
+
+  snapshot.docs.forEach((doc) => memberships.push(doc.data()));
+
+  if (userEmail) {
+    const emailSnapshot = await collection<MembershipRow>("members")
+      .where("email", "==", userEmail)
+      .get();
+    
+    emailSnapshot.docs.forEach((doc) => {
+      const row = doc.data();
+      if (!memberships.find((m) => m.tenant_id === row.tenant_id)) {
+        memberships.push(row);
+      }
+    });
+  }
+
+  return memberships;
 }
 
 export async function listTenantProducts(tenantId: string): Promise<ProductRow[]> {

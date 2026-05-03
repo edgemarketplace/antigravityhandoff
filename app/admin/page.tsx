@@ -9,7 +9,7 @@ import { OnboardingProgressCard } from "@/components/OnboardingProgressCard";
 import { AdminSignInGate } from "@/components/AdminSignInGate";
 import { resolveTenantBySlug } from "@/lib/tenant-context";
 import { ADMIN_READ_ROLES, getAuthenticatedUserFromRequest, isSuperAdminEmail, requireTenantMembership } from "@/lib/admin-auth";
-import { getLatestStripePaymentAccount, listTenantOrders, listTenantProducts, listTenants } from "@/lib/firebase-data";
+import { getLatestStripePaymentAccount, listTenantOrders, listTenantProducts, listTenants, listUserMemberships, findTenantById } from "@/lib/firebase-data";
 
 type AdminPageProps = {
   searchParams: Promise<{ tenant?: string }>;
@@ -85,12 +85,30 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       );
     }
 
+    if (user) {
+      const memberships = await listUserMemberships(user.id, user.email);
+      if (memberships.length > 0) {
+        const firstMembership = memberships[0];
+        const tenant = await findTenantById(firstMembership.tenant_id);
+        if (tenant && tenant.slug) {
+          redirect(`/admin?tenant=${encodeURIComponent(tenant.slug)}`);
+        }
+      }
+    }
+
     return (
       <main className="mx-auto w-full max-w-5xl space-y-4 px-6 py-8 md:px-10">
         <h1 className="text-3xl font-semibold tracking-tight">Admin</h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-300">
-          Tenant context was not detected. Open this page on a tenant subdomain (for example
-          <code> acme.edgecommerce.com/admin</code>) or pass <code>?tenant=acme</code>.
+          {user ? (
+            <>
+              Signed in as <strong>{user.email ?? user.id}</strong>, but no tenant context was detected and you don't belong to any existing tenants yet. Open this page on a tenant subdomain (for example <code>acme.edgecommerce.com/admin</code>) or pass <code>?tenant=acme</code>.
+            </>
+          ) : (
+            <>
+              Tenant context was not detected. Open this page on a tenant subdomain (for example <code>acme.edgecommerce.com/admin</code>) or pass <code>?tenant=acme</code>.
+            </>
+          )}
         </p>
         <div className="flex flex-wrap gap-3">
           <Link href="/onboarding" className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold uppercase">
@@ -100,7 +118,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             Go to storefront demo route
           </Link>
         </div>
-        <AdminSignInGate />
+        {!user && <AdminSignInGate />}
       </main>
     );
   }
@@ -126,7 +144,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       <main className="mx-auto w-full max-w-5xl space-y-4 px-6 py-8 md:px-10">
         <h1 className="text-3xl font-semibold tracking-tight">Admin</h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-300">{auth.message}</p>
-        <AdminSignInGate />
+        {auth.status === 401 && <AdminSignInGate />}
       </main>
     );
   }
