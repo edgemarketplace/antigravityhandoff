@@ -1,0 +1,475 @@
+﻿That’s not just a “small tweak”—that’s actually a very strong pricing model for what you’re building. It aligns perfectly with your marketplace vision.
+Let’s tighten it up so it’s both clear to users and easy to implement technically.
+________________
+
+
+💰 Your Pricing Model (Refined)
+🟢 Free Plan (Growth Engine)
+$0/month
+5% transaction fee
+Unlimited products
+Unlimited stores
+Position it as:
+“Start free. Only pay when you sell.”
+👉 This removes friction and drives signups.
+________________
+
+
+🔵 Paid Plan (Serious Sellers)
+$99/month
+0% transaction fee
+Everything included
+Position it as:
+“Keep 100% of your revenue.”
+👉 This is your upgrade trigger once they get traction.
+________________
+
+
+🧠 Why This Works (Strategically)
+You’re combining the best of:
+* Shopify (subscription model)
+* Marketplace-style revenue (transaction fee)
+Behavior this creates:
+User Type
+	Plan
+	New / testing
+	Free
+	Growing
+	Still Free (you earn %)
+	High volume
+	Upgrade to $99
+	Power sellers
+	Stay long-term
+	________________
+
+
+📈 The Built-In Upgrade Trigger (Important)
+This is where your model shines.
+Break-even math:
+5% of revenue = $99
+So:
+$99 / 0.05 = $1,980/month
+👉 Once a seller makes ~$2K/month, upgrading saves money.
+That’s your natural conversion point.
+________________
+
+
+🔥 How to Present It (THIS matters)
+Don’t just list pricing. Guide them.
+Inside dashboard show:
+“You paid $127 in fees this month.
+Upgrade to Pro and keep it.”
+👉 That’s a conversion machine.
+________________
+
+
+⚙️ How to Implement This in Your System
+Database fields:
+plan_type (free / paid)
+subscription_status
+monthly_revenue
+transaction_fees_collected
+________________
+
+
+Checkout Logic:
+If FREE plan:
+order_total → take 5%
+If PAID plan:
+order_total → no platform fee
+________________
+
+
+Stripe Setup
+Use:
+* Stripe Connect
+You’ll need:
+* Application fee (5%) for free users
+* Subscription ($99/month) for paid users
+________________
+
+
+⚠️ One Important Decision
+What about your 10% shipping margin?
+You have 2 options:
+Option A (Simpler)
+* Keep shipping margin on BOTH plans
+Option B (More premium feel)
+* Free plan → 10% shipping margin
+* Paid plan → reduced or removed shipping margin
+👉 Recommendation:
+Start with Option A (simpler + predictable revenue)
+________________
+
+
+🚀 Final Polished Pricing Page Copy
+Free
+Launch your store for free
+✔ Unlimited products
+✔ Custom storefront
+✔ Print-on-demand ready
+✔ Pay only 5% per sale
+________________
+
+
+Pro — $99/month
+For growing brands
+✔ 0% transaction fees
+✔ Keep more of every sale
+✔ Custom domain support
+✔ Priority support
+________________
+
+
+🧩 One More Smart Add-On (Optional Later)
+You can add:
+* $29/mo “Starter Pro”
+* or volume-based discounts
+But don’t do this now—your current model is clean and powerful.
+________________
+
+
+🏁 Bottom Line
+This pricing:
+✅ Removes signup friction
+✅ Aligns with your “Edge marketplace” concept
+✅ Scales with your users
+✅ Incentivizes growth
+✅ Converts naturally at ~$2K/month
+
+
+
+
+Below is a practical scope of work for your Edge Marketplace Hub.
+Scope of Work: Edge Marketplace Hub
+1. Core Goal
+Build a multi-tenant ecommerce platform where businesses can quickly launch online stores using:
+* Medusa self-hosted backend
+* Supabase Postgres/Auth
+* Cloudflare DNS/subdomains
+* Stripe Connect payments
+* Printify integration
+* Custom storefront templates
+* Referral onboarding links
+* Platform fee + shipping margin logic
+________________
+
+
+2. MVP User Flow
+Client lands on:
+myedgemarketplace.com/start?ref=partner123
+They:
+1. Sign in with Google
+2. Choose store name
+3. Pick template
+4. Add business info
+5. Get instant subdomain:
+jasonsstore.edgemarketplacehub.com
+6. Enter dashboard
+7. Add/import products
+8. Connect payments
+9. Optionally connect custom domain
+10. Launch store
+________________
+
+
+3. Platform Architecture
+Recommended stack:
+Frontend: React / Next.js
+Commerce Backend: Medusa self-hosted on VPS
+Database: Supabase Postgres
+Auth: Supabase Auth
+Cache/Jobs: Redis / Upstash
+DNS/CDN: Cloudflare
+Payments: Stripe Connect
+Email: Resend
+Fulfillment: Printify + manual shipping
+Hosting: Hostinger VPS + optional Vercel frontend
+________________
+
+
+4. Main Build Modules
+A. Public Marketing Site
+Pages:
+* Home
+* Pricing
+* Features
+* Templates
+* Start Free Store
+* Referral landing pages
+* Login
+* Help / FAQ
+Key CTA:
+Start your free store
+________________
+
+
+B. Client Onboarding Wizard
+Steps:
+1. Google login
+2. Store name
+3. Business name
+4. Template selection
+5. Logo / branding
+6. Product source:
+   * Add manually
+   * CSV import
+   * Connect Printify
+   * Migration help
+7. Payment setup
+8. Domain setup
+9. Launch checklist
+________________
+
+
+C. Tenant / Store Creation
+When a client signs up, system creates:
+store_id
+owner_user_id
+subdomain
+template_id
+business_profile
+billing_status
+payment_status
+domain_status
+referral_source
+Example:
+jasonsstore → store_123
+________________
+
+
+D. Medusa Backend
+Medusa handles:
+* Products
+* Collections
+* Variants
+* Inventory
+* Carts
+* Orders
+* Customers
+* Discounts
+* Taxes
+* Fulfillment status
+Custom logic needed for:
+* Multi-tenant store separation
+* Platform fee
+* Shipping margin
+* Referral attribution
+* Printify product sync
+* Custom domain mapping
+* Store templates
+________________
+
+
+E. Storefront Templates
+Start with 3 templates:
+1. Simple retail
+2. Apparel / merch
+3. Local service + products
+Each template supports:
+* Logo
+* Colors
+* Hero text
+* Featured products
+* Collections
+* About section
+* Contact/social links
+________________
+
+
+F. Products
+Product intake options:
+MVP
+* Manual product entry
+* CSV import
+V1
+* Shopify export import
+* WooCommerce export import
+* Printify sync
+* Image import
+* Variant mapping
+* Inventory sync
+Avoid scraping as the main method. Use it only with permission and only when no export/API exists.
+________________
+
+
+G. Printify Integration
+Client connects Printify.
+System syncs:
+* Products
+* Variants
+* Images
+* Pricing
+* Fulfillment provider
+* Order routing
+When Printify product sells:
+Order → Medusa → Printify fulfillment → status sync
+________________
+
+
+H. Payments
+Use Stripe Connect.
+Needed flows:
+* Client connects Stripe
+* Customer pays at checkout
+* Your platform takes 5% fee
+* Seller receives payout
+* Shipping margin handled in checkout/pricing logic
+________________
+
+
+I. Shipping
+Support:
+* Manual shipping
+* Flat-rate shipping
+* Printify shipping
+* Your 10% shipping margin
+Shipping logic:
+base shipping cost + 10% margin = customer shipping charge
+________________
+
+
+J. Domains
+Default
+Every store gets:
+storename.edgemarketplacehub.com
+Custom domain
+Client enters:
+www.jasonsstore.com
+You show:
+Type: CNAME
+Host: www
+Value: app.edgemarketplacehub.com
+System checks DNS and activates domain.
+Use Cloudflare for:
+* Wildcard subdomains
+* SSL
+* Proxy/CDN
+* DNS verification
+________________
+
+
+K. Referral System
+Track:
+referral_code
+partner_id
+store_id
+signup_date
+orders
+revenue
+commission_status
+Referral link example:
+myedgemarketplace.com/start?ref=jason
+________________
+
+
+L. Admin Dashboards
+Client Dashboard
+Client can manage:
+* Store setup
+* Products
+* Orders
+* Customers
+* Printify
+* Payments
+* Domains
+* Theme
+* Store settings
+* Launch checklist
+Platform Admin Dashboard
+You can manage:
+* All stores
+* Revenue
+* Fees
+* Referrals
+* Domains
+* Failed orders
+* Printify sync issues
+* Support tickets
+* Client status
+________________
+
+
+M. Emails
+Automated emails:
+* Welcome email
+* Store created
+* Domain instructions
+* Payment setup reminder
+* First order notification
+* Failed payment alert
+* Printify sync issue
+* Referral signup alert
+Use Resend or similar.
+________________
+
+
+5. Development Phases
+Phase 1 — Foundation
+* VPS setup
+* Medusa install
+* Supabase setup
+* Redis setup
+* Cloudflare setup
+* GitHub deployment flow
+* Environment variables
+* Basic frontend/backend connection
+Phase 2 — Onboarding MVP
+* Google login
+* Store creation
+* Template picker
+* Subdomain generation
+* Welcome email
+* Client dashboard shell
+Phase 3 — Commerce MVP
+* Product management
+* Product display storefront
+* Cart/checkout
+* Stripe Connect
+* Orders dashboard
+* Platform fee logic
+Phase 4 — Domains + Referrals
+* Referral links
+* Referral tracking
+* Custom domain screen
+* DNS instructions
+* Domain verification
+* SSL activation
+Phase 5 — Product Import + Printify
+* CSV import
+* Printify connection
+* Product sync
+* Order routing
+* Fulfillment status sync
+Phase 6 — Polish + Launch
+* Store templates
+* Analytics
+* Error handling
+* Support tools
+* Admin panel
+* Documentation
+* Beta client onboarding
+________________
+
+
+6. MVP Cut Line
+For the first working version, build only:
+Google login
+Store name
+Template selection
+Instant subdomain
+Basic product entry
+Basic storefront
+Stripe Connect
+5% platform fee
+Client dashboard
+Domain instructions
+Referral tracking
+Add Printify and CSV import immediately after MVP.
+________________
+
+
+7. Best First Milestone
+Your first milestone should be:
+A client signs up, chooses a store name, and gets a live subdomain storefront automatically.
+That is the proof-of-concept moment.

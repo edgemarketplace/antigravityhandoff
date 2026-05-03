@@ -2,73 +2,90 @@ import Link from "next/link";
 import { ProductGrid } from "@/components/ProductGrid";
 import { SyncButton } from "@/components/SyncButton";
 
-const stylePills = ["Utility Tees", "Oversized Fits", "Station Basics", "Graphic Drops", "Layering Pieces"];
+const categories = [
+  "All Templates",
+  "Fashion",
+  "Wellness",
+  "Beauty",
+  "Local Services",
+  "Food & Beverage",
+  "Events",
+  "Digital Products",
+];
 
-const promoTiles = [
+const highlightCards = [
   {
-    title: "Fresh Graphics",
-    subtitle: "Weekly capsule drops inspired by real station life.",
-    tone: "from-rose-500/10 to-fuchsia-500/10 border-rose-300/70 dark:border-rose-900/70",
+    tag: "NEW",
+    title: "Premium Theme Drops",
+    copy: "Professionally-designed storefront templates with conversion-focused sections.",
   },
   {
-    title: "Uniform Off-Duty",
-    subtitle: "Relaxed essentials for downtime, travel, and training days.",
-    tone: "from-cyan-500/10 to-sky-500/10 border-cyan-300/70 dark:border-cyan-900/70",
+    tag: "FAST",
+    title: "7-Day Store Launch",
+    copy: "Pick a template, connect products, and publish with onboarding and admin built in.",
   },
   {
-    title: "Built to Repeat",
-    subtitle: "Everyday staples designed for heavy rotation and clean fits.",
-    tone: "from-amber-500/15 to-orange-500/10 border-amber-300/70 dark:border-amber-900/70",
+    tag: "SCALE",
+    title: "Growth-Ready Stack",
+    copy: "Payments, shipping, and automation patterns included for real operations.",
   },
+];
+
+const trustStats = [
+  { label: "Template styles", value: "20+" },
+  { label: "Launch window", value: "7 days" },
+  { label: "Managed sync", value: "24/7" },
+  { label: "Checkout ready", value: "Stripe" },
 ];
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#fffdfb_0%,#ffffff_35%,#fff8f1_100%)] text-zinc-900 dark:bg-black dark:text-zinc-100">
-      <main className="mx-auto flex w-full max-w-[1400px] flex-col gap-12 px-4 py-8 md:gap-16 md:px-8 md:py-12">
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
-          <div className="flex flex-col justify-between rounded-3xl border border-orange-200/80 bg-[linear-gradient(160deg,#fff8f1,#fff,#fff3e8)] p-8 md:p-12 dark:border-zinc-800 dark:bg-zinc-950/60">
-            <div className="space-y-5">
-              <p className="text-[11px] font-medium tracking-[0.22em] text-orange-700 uppercase dark:text-orange-300">Spring 2026 Collection</p>
-              <h1 className="max-w-xl text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
-                Built for duty.
-                <br /> Styled for every day.
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      <main className="mx-auto w-full max-w-[1380px] space-y-8 px-4 py-8 md:space-y-12 md:px-8 md:py-10">
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_24px_60px_-32px_rgba(2,6,23,0.35)]">
+          <div className="grid gap-8 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white md:p-10 lg:grid-cols-[1.15fr_1fr] lg:items-center">
+            <div className="space-y-6">
+              <p className="text-[11px] font-semibold tracking-[0.24em] uppercase text-slate-300">EDGE MARKETPLACE HUB</p>
+              <h1 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight md:text-6xl">
+                Modern commerce templates with a professional storefront feel.
               </h1>
-              <p className="max-w-lg text-sm text-zinc-600 md:text-base dark:text-zinc-300">
-                A clean, urban-inspired lineup of responder-driven apparel. Minimal palettes, bold graphics,
-                and premium blanks that move from shift to street.
+              <p className="max-w-xl text-sm text-slate-300 md:text-base">
+                Inspired by leading ecommerce layouts: clean merchandising, clear hierarchy, and fast paths to launch.
+                Browse templates, onboard a test store, and manage everything from one admin.
               </p>
-            </div>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link
-                href="#shop"
-                className="rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-5 py-2.5 text-xs font-medium tracking-[0.14em] text-white uppercase transition hover:from-orange-600 hover:to-rose-600 dark:from-orange-400 dark:to-rose-400 dark:text-zinc-900 dark:hover:from-orange-300 dark:hover:to-rose-300"
-              >
-                Shop New Arrivals
-              </Link>
-              <Link
-                href="/checkout"
-                className="rounded-full border border-orange-300 bg-white/70 px-5 py-2.5 text-xs font-medium tracking-[0.14em] text-orange-700 uppercase transition hover:bg-orange-50 dark:border-zinc-700 dark:bg-transparent dark:text-zinc-200 dark:hover:bg-zinc-900"
-              >
-                View Cart
-              </Link>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-rose-300/70 bg-[radial-gradient(circle_at_20%_20%,#ffe6f0,transparent_42%),radial-gradient(circle_at_80%_10%,#fff3c4,transparent_34%),linear-gradient(135deg,#7c3aed,#ec4899_55%,#f97316)] p-8 text-white md:p-10 dark:border-zinc-700">
-            <div className="flex h-full flex-col justify-between">
-              <div className="space-y-4">
-                <p className="text-[11px] tracking-[0.22em] uppercase text-zinc-300">Editor Picks</p>
-                <h2 className="max-w-md text-3xl font-medium leading-tight md:text-4xl">
-                  Utility-driven silhouettes. City-ready comfort.
-                </h2>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="#templates"
+                  className="rounded-full bg-white px-5 py-2.5 text-xs font-semibold tracking-[0.14em] text-slate-900 uppercase transition hover:bg-slate-100"
+                >
+                  Browse Templates
+                </Link>
+                <Link
+                  href="/onboarding"
+                  className="rounded-full border border-slate-400/40 bg-white/10 px-5 py-2.5 text-xs font-semibold tracking-[0.14em] uppercase transition hover:bg-white/20"
+                >
+                  Start Onboarding
+                </Link>
+                <Link
+                  href="/admin"
+                  className="rounded-full border border-slate-400/40 bg-white/10 px-5 py-2.5 text-xs font-semibold tracking-[0.14em] uppercase transition hover:bg-white/20"
+                >
+                  Open Admin
+                </Link>
               </div>
-              <div className="mt-8 grid grid-cols-2 gap-3 text-[11px] tracking-[0.12em] uppercase md:grid-cols-3">
-                {stylePills.map((pill) => (
-                  <span key={pill} className="rounded-full border border-white/45 bg-black/15 px-3 py-2 text-center backdrop-blur-sm">
-                    {pill}
-                  </span>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+              <p className="mb-4 text-[11px] font-semibold tracking-[0.2em] uppercase text-slate-300">Template categories</p>
+              <div className="grid grid-cols-2 gap-2 text-xs md:text-sm">
+                {categories.map((category) => (
+                  <div
+                    key={category}
+                    className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 font-medium text-slate-100"
+                  >
+                    {category}
+                  </div>
                 ))}
               </div>
             </div>
@@ -76,23 +93,60 @@ export default function Home() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-3">
-          {promoTiles.map((tile) => (
-            <article
-              key={tile.title}
-              className={`space-y-2 rounded-2xl border bg-gradient-to-br ${tile.tone} p-6`}
-            >
-              <h3 className="text-sm font-semibold tracking-[0.12em] uppercase">{tile.title}</h3>
-              <p className="text-sm text-zinc-600 dark:text-zinc-300">{tile.subtitle}</p>
+          {highlightCards.map((card) => (
+            <article key={card.title} className="rounded-2xl border border-slate-200 bg-white p-6">
+              <p className="mb-3 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold tracking-[0.14em] text-slate-600 uppercase">
+                {card.tag}
+              </p>
+              <h3 className="text-base font-semibold tracking-tight text-slate-900">{card.title}</h3>
+              <p className="mt-2 text-sm text-slate-600">{card.copy}</p>
             </article>
           ))}
         </section>
 
-        <section id="shop" className="space-y-6">
-          <div className="flex flex-col gap-4 border-b border-orange-200/80 pb-4 md:flex-row md:items-end md:justify-between dark:border-zinc-800">
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-r from-blue-900 via-slate-900 to-slate-800 p-6 text-white md:p-8">
+          <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr] lg:items-center">
             <div>
-              <p className="text-[11px] font-medium tracking-[0.2em] text-rose-600 uppercase dark:text-rose-300">Shop</p>
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">New In This Week</h2>
-              <p className="mt-1 text-xs tracking-[0.16em] text-zinc-500 uppercase">Curated for everyday wear</p>
+              <p className="mb-3 text-[11px] font-semibold tracking-[0.2em] uppercase text-blue-200">Limited offer</p>
+              <h2 className="text-3xl font-semibold leading-tight md:text-4xl">Launch a polished template storefront this week.</h2>
+              <p className="mt-3 max-w-2xl text-sm text-slate-200 md:text-base">
+                Professional design system, dark-blue visual identity, and admin workflows ready for test-store onboarding.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href="#templates"
+                  className="rounded-full bg-white px-5 py-2.5 text-xs font-semibold tracking-[0.14em] text-slate-900 uppercase transition hover:bg-slate-100"
+                >
+                  Explore Catalog
+                </Link>
+                <Link
+                  href="/onboarding"
+                  className="rounded-full border border-white/30 px-5 py-2.5 text-xs font-semibold tracking-[0.14em] uppercase transition hover:bg-white/10"
+                >
+                  Begin Setup
+                </Link>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              {trustStats.map((stat) => (
+                <div key={stat.label} className="rounded-xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+                  <p className="text-2xl font-semibold tracking-tight">{stat.value}</p>
+                  <p className="text-[11px] tracking-[0.12em] text-slate-200 uppercase">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="templates" className="space-y-6">
+          <div className="flex flex-col gap-4 border-b border-slate-300 pb-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold tracking-[0.2em] text-slate-500 uppercase">Template library</p>
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">Featured storefront templates</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Curated marketplace-style browsing with live product sync and production-minded storefront architecture.
+              </p>
             </div>
             <SyncButton />
           </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { resolveTenantFromRequest } from "@/lib/tenant-context";
 import { ADMIN_READ_ROLES, ADMIN_WRITE_ROLES, requireTenantMembership } from "@/lib/admin-auth";
+import { createTenantProduct, deleteTenantProduct, listTenantProducts, updateTenantProduct } from "@/lib/firebase-data";
 
 export const dynamic = "force-dynamic";
 
@@ -52,18 +52,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, message: auth.message }, { status: auth.status });
   }
 
-  const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select("printify_id,title,description,price,image_url,variants,created_at")
-    .eq("tenant_id", tenant.id)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ success: true, tenant, products: data ?? [] });
+  const products = await listTenantProducts(tenant.id);
+  return NextResponse.json({ success: true, tenant, products });
 }
 
 export async function POST(request: Request) {
@@ -84,26 +74,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, message: "Product title is required." }, { status: 400 });
   }
 
-  const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("products")
-    .insert({
-      tenant_id: tenant.id,
-      printify_id: payload.printify_id,
-      title: payload.title,
-      description: payload.description,
-      price: payload.price,
-      image_url: payload.image_url,
-      variants: [],
-    })
-    .select("printify_id,title,description,price,image_url,variants,created_at")
-    .single();
+  const product = await createTenantProduct({
+    tenant_id: tenant.id,
+    printify_id: payload.printify_id,
+    title: payload.title,
+    description: payload.description,
+    price: payload.price,
+    image_url: payload.image_url,
+    variants: [],
+  });
 
-  if (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ success: true, product: data });
+  return NextResponse.json({ success: true, product });
 }
 
 export async function PATCH(request: Request) {
@@ -150,20 +131,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: false, message: "No update fields were provided." }, { status: 400 });
   }
 
-  const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("products")
-    .update(updates)
-    .eq("tenant_id", tenant.id)
-    .eq("printify_id", printifyId)
-    .select("printify_id,title,description,price,image_url,variants,created_at")
-    .single();
-
-  if (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  const product = await updateTenantProduct(tenant.id, printifyId, updates);
+  if (!product) {
+    return NextResponse.json({ success: false, message: "Product not found." }, { status: 404 });
   }
 
-  return NextResponse.json({ success: true, product: data });
+  return NextResponse.json({ success: true, product });
 }
 
 export async function DELETE(request: Request) {
@@ -184,16 +157,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: false, message: "printify_id query parameter is required." }, { status: 400 });
   }
 
-  const supabase = getSupabaseAdminClient();
-  const { error } = await supabase
-    .from("products")
-    .delete()
-    .eq("tenant_id", tenant.id)
-    .eq("printify_id", printifyId);
-
-  if (error) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
-  }
-
+  await deleteTenantProduct(tenant.id, printifyId);
   return NextResponse.json({ success: true, printify_id: printifyId });
 }

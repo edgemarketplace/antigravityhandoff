@@ -1,4 +1,5 @@
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { FieldValue } from "firebase-admin/firestore";
+import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 
 type RecordPaidOrderUsageInput = {
   tenantId: string;
@@ -12,49 +13,51 @@ function computeFeeCents(amountCents: number, currentPlan: string): number {
 }
 
 export async function recordPaidOrderUsage(input: RecordPaidOrderUsageInput): Promise<{ applied: boolean; feeCents: number }> {
-  const supabase = getSupabaseAdminClient();
-
-  const { data: tenant, error: tenantError } = await supabase
-    .from("tenants")
-    .select("current_plan")
-    .eq("id", input.tenantId)
-    .maybeSingle();
-
-  if (tenantError || !tenant) {
-    throw new Error(`Could not resolve tenant plan for usage tracking: ${tenantError?.message ?? "tenant not found"}`);
-  }
+  const db = getFirebaseAdminDb();
+  const tenantRef = db.collection("tenants").doc(input.tenantId);
+  const usageEventId = `${input.tenantId}_order_completed_${input.orderId}`;
+  const usageRef = db.collection("usage_events").doc(usageEventId);
 
   const amountCents = Math.max(0, Math.round(input.amountCents));
-  const feeCents = computeFeeCents(amountCents, tenant.current_plan);
 
-  const { error: insertError } = await supabase.from("usage_events").insert({
-    tenant_id: input.tenantId,
-    event_type: "order_completed",
-    amount_cents: amountCents,
-    fee_cents: feeCents,
-    event_key: input.orderId,
-    metadata: {
-      order_id: input.orderId,
-      current_plan: tenant.current_plan,
-    },
-  });
+  const result = await db.runTransaction(async (tx) => {
+    const tenantSnap = await tx.get(tenantRef);
+    if (!tenantSnap.exists) {
+      throw new Error("Could not resolve tenant plan for usage tracking: tenant not found");
+    }
 
-  if (insertError) {
-    if (insertError.code === "23505") {
+    const tenant = tenantSnap.data() as { current_plan?: string };
+    const currentPlan = tenant.current_plan ?? "free";
+    const feeCents = computeFeeCents(amountCents, currentPlan);
+
+    const existingUsage = await tx.get(usageRef);
+    if (existingUsage.exists) {
       return { applied: false, feeCents };
     }
-    throw new Error(`Could not write usage event: ${insertError.message}`);
-  }
 
-  const { error: usageError } = await supabase.rpc("increment_tenant_usage", {
-    p_tenant_id: input.tenantId,
-    p_amount_cents: amountCents,
-    p_fee_cents: feeCents,
+    tx.set(usageRef, {
+      tenant_id: input.tenantId,
+      event_type: "order_completed",
+      amount_cents: amountCents,
+      fee_cents: feeCents,
+      event_key: input.orderId,
+      metadata: { order_id: input.orderId, current_plan: currentPlan },
+      created_at: new Date().toISOString(),
+    });
+
+    tx.set(
+      tenantRef,
+      {
+        monthly_order_count: FieldValue.increment(1),
+        monthly_gmv_cents: FieldValue.increment(amountCents),
+        monthly_fee_cents: FieldValue.increment(feeCents),
+        updated_at: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+
+    return { applied: true, feeCents };
   });
 
-  if (usageError) {
-    throw new Error(`Could not update tenant usage counters: ${usageError.message}`);
-  }
-
-  return { applied: true, feeCents };
+  return result;
 }

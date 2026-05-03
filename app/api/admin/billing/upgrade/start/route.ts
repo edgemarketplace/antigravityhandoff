@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ADMIN_WRITE_ROLES, requireTenantMembership } from "@/lib/admin-auth";
 import { getStripe } from "@/lib/stripe";
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { resolveTenantFromRequest } from "@/lib/tenant-context";
 
 export const dynamic = "force-dynamic";
@@ -29,19 +29,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const supabase = getSupabaseAdminClient();
-  const { data: tenantBilling, error: billingError } = await supabase
-    .from("tenants")
-    .select("id,name,slug,stripe_customer_id,current_plan")
-    .eq("id", tenant.id)
-    .maybeSingle();
-
-  if (billingError || !tenantBilling) {
-    return NextResponse.json(
-      { success: false, message: billingError?.message ?? "Tenant billing state not found." },
-      { status: 500 },
-    );
+  const db = getFirebaseAdminDb();
+  const tenantSnap = await db.collection("tenants").doc(tenant.id).get();
+  if (!tenantSnap.exists) {
+    return NextResponse.json({ success: false, message: "Tenant billing state not found." }, { status: 500 });
   }
+
+  const tenantBilling = tenantSnap.data() as {
+    name?: string;
+    slug?: string;
+    stripe_customer_id?: string | null;
+    current_plan?: "free" | "growth";
+  };
 
   if (tenantBilling.current_plan === "growth") {
     return NextResponse.json(
@@ -52,11 +51,11 @@ export async function POST(request: Request) {
 
   const stripe = getStripe();
 
-  let customerId = tenantBilling.stripe_customer_id as string | null;
+  let customerId = tenantBilling.stripe_customer_id ?? null;
   if (!customerId) {
     const customer = await stripe.customers.create({
       email: auth.user.email ?? undefined,
-      name: tenantBilling.name,
+      name: tenantBilling.name ?? tenant.name,
       metadata: {
         tenant_id: tenant.id,
         tenant_slug: tenant.slug,
@@ -65,14 +64,13 @@ export async function POST(request: Request) {
 
     customerId = customer.id;
 
-    const { error: customerUpdateError } = await supabase
-      .from("tenants")
-      .update({ stripe_customer_id: customerId, plan_updated_at: new Date().toISOString() })
-      .eq("id", tenant.id);
-
-    if (customerUpdateError) {
-      return NextResponse.json({ success: false, message: customerUpdateError.message }, { status: 500 });
-    }
+    await db.collection("tenants").doc(tenant.id).set(
+      {
+        stripe_customer_id: customerId,
+        plan_updated_at: new Date().toISOString(),
+      },
+      { merge: true },
+    );
   }
 
   const appUrl = resolveAppUrl();

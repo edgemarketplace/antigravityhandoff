@@ -1,19 +1,24 @@
 import { NextResponse } from "next/server";
 import { fetchPrintifyProducts } from "@/lib/printify";
-import { getSupabaseAdminClient, type ProductRow } from "@/lib/supabase-admin";
+import { createTenantProduct } from "@/lib/firebase-data";
+import { resolveTenantFromRequest } from "@/lib/tenant-context";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    const tenant = await resolveTenantFromRequest(request);
+    if (!tenant) {
+      return NextResponse.json({ success: false, message: "Tenant context not found." }, { status: 400 });
+    }
+
     const printifyProducts = await fetchPrintifyProducts();
-    const supabase = getSupabaseAdminClient();
 
-    const mappedProducts: ProductRow[] = printifyProducts.map((product) => {
-      const firstEnabledVariant =
-        product.variants?.find((variant) => variant.is_enabled) ?? product.variants?.[0];
+    for (const product of printifyProducts) {
+      const firstEnabledVariant = product.variants?.find((variant) => variant.is_enabled) ?? product.variants?.[0];
 
-      return {
+      await createTenantProduct({
+        tenant_id: tenant.id,
         printify_id: product.id,
         title: product.title,
         description: product.description ?? null,
@@ -21,21 +26,13 @@ export async function POST() {
         image_url: product.images?.[0]?.src ?? null,
         image_urls: (product.images ?? []).map((image) => image.src),
         variants: product.variants ?? [],
-      };
-    });
-
-    const { error } = await supabase
-      .from("products")
-      .upsert(mappedProducts, { onConflict: "printify_id" });
-
-    if (error) {
-      throw new Error(`Supabase upsert failed: ${error.message}`);
+      });
     }
 
     return NextResponse.json({
       success: true,
-      synced: mappedProducts.length,
-      message: `Synced ${mappedProducts.length} products successfully.`,
+      synced: printifyProducts.length,
+      message: `Synced ${printifyProducts.length} products successfully.`,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync failure.";
@@ -43,6 +40,6 @@ export async function POST() {
   }
 }
 
-export async function GET() {
-  return POST();
+export async function GET(request: Request) {
+  return POST(request);
 }

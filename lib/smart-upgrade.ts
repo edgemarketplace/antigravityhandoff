@@ -1,5 +1,5 @@
 export const FREE_PLAN_FEE_PERCENT = 0.05;
-export const GROWTH_PLAN_PRICE_CENTS = 14_900;
+export const GROWTH_PLAN_PRICE_CENTS = 9_900;
 
 type NudgeLevel = "none" | "soft" | "strong" | "urgent";
 
@@ -22,15 +22,15 @@ export function getFeeNudge(monthlyFeeCents: number): FeeNudge {
     return {
       level: "urgent",
       title: "You’re losing profit",
-      body: "You’ve paid over $150 in fees this month. Upgrading now immediately improves margins.",
+      body: "You’ve paid over $150 in fees this month. Growth ($99/month) can immediately improve your margins.",
     };
   }
 
-  if (monthlyFeeCents >= 10_000) {
+  if (monthlyFeeCents >= 9_900) {
     return {
       level: "strong",
-      title: "You’re close to saving money",
-      body: "You’ve paid over $100 in fees this month. Growth ($149/month) will likely lower your total payment cost.",
+      title: "Upgrade now to save",
+      body: "You’ve already crossed the $99 break-even point this month. Growth ($99/month) is now cheaper than 5% fees.",
     };
   }
 
@@ -38,7 +38,7 @@ export function getFeeNudge(monthlyFeeCents: number): FeeNudge {
     return {
       level: "soft",
       title: "You’re growing 🚀",
-      body: "You’ve paid over $50 in fees this month. At this pace, upgrading soon helps you keep more revenue.",
+      body: "You’ve paid over $50 in fees this month. As you approach $99 in monthly fees, Growth becomes the better deal.",
     };
   }
 
@@ -57,7 +57,7 @@ export function getGrowthPlanComparison(monthlyFeeCents: number) {
   }
 
   if (diff === 0) {
-    return "On Growth Plan: you'd break even at $149 this month and keep 100% of order revenue.";
+    return "On Growth Plan: you'd break even at $99 this month and keep 100% of order revenue.";
   }
 
   return `On Growth Plan: you'd pay ${centsToUsd(Math.abs(diff))} more this month, but fees stop scaling with volume.`;

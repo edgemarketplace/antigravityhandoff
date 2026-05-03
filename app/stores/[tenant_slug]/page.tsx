@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductCard } from "@/components/ProductCard";
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { listTenantProducts } from "@/lib/firebase-data";
+import { resolveTenantBySlug } from "@/lib/tenant-context";
 
 type TenantStorePageProps = {
   params: Promise<{ tenant_slug: string }>;
@@ -27,28 +28,16 @@ type TenantProductRecord = {
 export default async function TenantStorePage({ params }: TenantStorePageProps) {
   const { tenant_slug } = await params;
 
-  const supabase = getSupabaseAdminClient();
+  const tenant = await resolveTenantBySlug(tenant_slug);
 
-  const { data: tenant, error: tenantError } = await supabase
-    .from("tenants")
-    .select("id,slug,name,primary_color,logo_url")
-    .eq("slug", tenant_slug)
-    .maybeSingle();
-
-  if (tenantError || !tenant) {
+  if (!tenant) {
     notFound();
   }
 
   const typedTenant = tenant as TenantRecord;
   const accent = typedTenant.primary_color ?? "#f97316";
 
-  const { data: products, error: productsError } = await supabase
-    .from("products")
-    .select("printify_id,title,description,price,image_url,variants")
-    .eq("tenant_id", typedTenant.id)
-    .order("created_at", { ascending: false });
-
-  const typedProducts: TenantProductRecord[] = productsError ? [] : ((products ?? []) as TenantProductRecord[]);
+  const typedProducts: TenantProductRecord[] = (await listTenantProducts(typedTenant.id)) as TenantProductRecord[];
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-10 px-6 py-8 md:px-10">

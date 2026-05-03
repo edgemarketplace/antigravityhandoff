@@ -1,12 +1,15 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { AdminProductsManager } from "@/components/AdminProductsManager";
 import { RealtimeOrdersPanel } from "@/components/RealtimeOrdersPanel";
 import { AdminSettingsPanel } from "@/components/AdminSettingsPanel";
 import { AdminFeeTrackerCard } from "@/components/AdminFeeTrackerCard";
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { OnboardingProgressCard } from "@/components/OnboardingProgressCard";
+import { AdminSignInGate } from "@/components/AdminSignInGate";
 import { resolveTenantBySlug } from "@/lib/tenant-context";
-import { ADMIN_READ_ROLES, requireTenantMembership } from "@/lib/admin-auth";
+import { ADMIN_READ_ROLES, getAuthenticatedUserFromRequest, isSuperAdminEmail, requireTenantMembership } from "@/lib/admin-auth";
+import { getLatestStripePaymentAccount, listTenantOrders, listTenantProducts, listTenants } from "@/lib/firebase-data";
 
 type AdminPageProps = {
   searchParams: Promise<{ tenant?: string }>;
@@ -34,6 +37,12 @@ type OrderRow = {
   status: string;
   currency: string;
   amount_total: number | null;
+  subtotal: number | null;
+  stripe_fee: number | null;
+  edge_payment_fee: number | null;
+  shipping_base_cost: number | null;
+  shipping_markup: number | null;
+  total_paid: number | null;
   printify_order_id: string | null;
   fulfillment_attempts: number;
   fulfillment_error: string | null;
@@ -52,6 +61,30 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     headerStore.get("x-tenant-slug")?.trim().toLowerCase() ?? resolvedParams.tenant?.trim().toLowerCase() ?? null;
 
   if (!tenantSlug) {
+    const authRequest = new Request("http://localhost/admin", { headers: new Headers(headerStore) });
+    const user = await getAuthenticatedUserFromRequest(authRequest);
+
+    if (user && isSuperAdminEmail(user.email)) {
+      const tenants = await listTenants(100);
+      const firstTenantWithSlug = tenants.find((t) => typeof t.slug === "string" && t.slug.trim().length > 0);
+
+      if (firstTenantWithSlug) {
+        redirect(`/admin?tenant=${encodeURIComponent(firstTenantWithSlug.slug)}`);
+      }
+
+      return (
+        <main className="mx-auto w-full max-w-5xl space-y-4 px-6 py-8 md:px-10">
+          <h1 className="text-3xl font-semibold tracking-tight">Super Admin</h1>
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">Signed in as {user.email ?? user.id}, but no tenants were found yet.</p>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/onboarding" className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold uppercase">
+              Start first test-store onboarding
+            </Link>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main className="mx-auto w-full max-w-5xl space-y-4 px-6 py-8 md:px-10">
         <h1 className="text-3xl font-semibold tracking-tight">Admin</h1>
@@ -59,6 +92,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           Tenant context was not detected. Open this page on a tenant subdomain (for example
           <code> acme.edgecommerce.com/admin</code>) or pass <code>?tenant=acme</code>.
         </p>
+        <div className="flex flex-wrap gap-3">
+          <Link href="/onboarding" className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold uppercase">
+            Start first test-store onboarding
+          </Link>
+          <Link href="/?tenant=demo" className="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold uppercase">
+            Go to storefront demo route
+          </Link>
+        </div>
+        <AdminSignInGate />
       </main>
     );
   }
@@ -84,42 +126,23 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       <main className="mx-auto w-full max-w-5xl space-y-4 px-6 py-8 md:px-10">
         <h1 className="text-3xl font-semibold tracking-tight">Admin</h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-300">{auth.message}</p>
+        <AdminSignInGate />
       </main>
     );
   }
 
-  const supabase = getSupabaseAdminClient();
-
-  const [{ data: products }, { data: orders }, { data: paymentAccount }] = await Promise.all([
-    supabase
-      .from("products")
-      .select("printify_id,title,description,price,image_url,variants,created_at")
-      .eq("tenant_id", tenant.id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("orders")
-      .select(
-        "id,stripe_session_id,customer_email,status,currency,amount_total,printify_order_id,fulfillment_attempts,fulfillment_error,created_at,updated_at,paid_at",
-      )
-      .eq("tenant_id", tenant.id)
-      .order("created_at", { ascending: false })
-      .limit(25),
-    supabase
-      .from("payment_accounts")
-      .select("account_ref,status")
-      .eq("tenant_id", tenant.id)
-      .eq("provider", "stripe_connect")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+  const [products, orders, paymentAccount] = await Promise.all([
+    listTenantProducts(tenant.id),
+    listTenantOrders(tenant.id, 25),
+    getLatestStripePaymentAccount(tenant.id),
   ]);
 
-  const initialProducts = ((products ?? []) as ProductRow[]).map((product) => ({
+  const initialProducts = (products as ProductRow[]).map((product) => ({
     ...product,
     price: Number(product.price || 0),
   }));
 
-  const initialOrders = (orders ?? []) as OrderRow[];
+  const initialOrders = orders as OrderRow[];
   const paymentAccountState = (paymentAccount ?? null) as PaymentAccountRow | null;
 
   const initialSettings = {
@@ -129,13 +152,20 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     primary_color: tenant.primary_color ?? "",
     logo_url: tenant.logo_url ?? "",
     payment_mode: tenant.payment_mode,
-    payment_application_fee_percent: Number(tenant.payment_application_fee_percent ?? 1),
+    shipping_mode: tenant.shipping_mode,
+    payment_fee_percent: Number(tenant.payment_fee_percent ?? 5),
+    shipping_markup_percent: Number(tenant.shipping_markup_percent ?? 10),
   };
 
-  const monthlyOrderCount = Number(tenant.monthly_order_count ?? 0);
-  const monthlyGmvCents = Number(tenant.monthly_gmv_cents ?? 0);
-  const monthlyFeeCents = Number(tenant.monthly_fee_cents ?? 0);
-  const currentPlan = tenant.current_plan ?? "free";
+  const totalRevenue = initialOrders.reduce((sum, order) => sum + Number(order.total_paid ?? order.amount_total ?? 0), 0);
+  const stripeFeesPaid = initialOrders.reduce((sum, order) => sum + Number(order.stripe_fee ?? 0), 0);
+  const edgeFeesPaid = initialOrders.reduce((sum, order) => sum + Number(order.edge_payment_fee ?? 0), 0);
+  const shippingMarginPaid = initialOrders.reduce((sum, order) => sum + Number(order.shipping_markup ?? 0), 0);
+  const platformFeesPaid = edgeFeesPaid + shippingMarginPaid;
+
+  const paymentSavings = tenant.payment_mode === "external" ? edgeFeesPaid : 0;
+  const shippingSavings = tenant.shipping_mode === "external" ? shippingMarginPaid : 0;
+  const totalSavings = paymentSavings + shippingSavings;
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-8 px-6 py-8 md:px-10">
@@ -157,10 +187,23 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
       <AdminFeeTrackerCard
         tenantSlug={tenant.slug}
-        currentPlan={currentPlan}
-        monthlyOrderCount={monthlyOrderCount}
-        monthlyGmvCents={monthlyGmvCents}
-        monthlyFeeCents={monthlyFeeCents}
+        paymentMode={tenant.payment_mode}
+        shippingMode={tenant.shipping_mode}
+        totalRevenue={totalRevenue}
+        stripeFeesPaid={stripeFeesPaid}
+        edgeFeesPaid={edgeFeesPaid}
+        shippingMarginPaid={shippingMarginPaid}
+        platformFeesPaid={platformFeesPaid}
+        totalSavings={totalSavings}
+      />
+
+      <OnboardingProgressCard
+        onboardingStatus={tenant.onboarding_status}
+        onboardingProgress={tenant.onboarding_progress}
+        productCount={initialProducts.length}
+        hasDomain={Boolean(tenant.custom_domain)}
+        paymentMode={tenant.payment_mode}
+        shippingMode={tenant.shipping_mode}
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">

@@ -1,5 +1,5 @@
 import { ProductCard } from "@/components/ProductCard";
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { listAllProducts } from "@/lib/firebase-data";
 
 type ProductRecord = {
   printify_id: string;
@@ -91,17 +91,7 @@ export async function ProductGrid() {
   let errorMessage: string | null = null;
 
   try {
-    const supabase = getSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("products")
-      .select("printify_id,title,description,price,image_url,image_urls,variants")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      errorMessage = error.message;
-    } else {
-      products = (data ?? []) as ProductRecord[];
-    }
+    products = (await listAllProducts(120)) as ProductRecord[];
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : "Failed to load products.";
   }

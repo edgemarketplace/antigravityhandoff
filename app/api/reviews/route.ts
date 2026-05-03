@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
 type ReviewRow = {
-  id: number;
+  id: string;
   product_id: string;
   reviewer_name: string;
   rating: number;
@@ -21,20 +21,32 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: false, message: "productId is required." }, { status: 400 });
     }
 
-    const supabase = getSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("reviews")
-      .select("id,product_id,reviewer_name,rating,comment,created_at")
-      .eq("product_id", productId)
-      .order("created_at", { ascending: false });
+    const db = getFirebaseAdminDb();
+    const snap = await db
+      .collection("reviews")
+      .where("product_id", "==", productId)
+      .orderBy("created_at", "desc")
+      .limit(100)
+      .get();
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    const reviews: ReviewRow[] = snap.docs.map((doc) => {
+      const data = doc.data() as Omit<ReviewRow, "id">;
+      return {
+        id: doc.id,
+        product_id: data.product_id,
+        reviewer_name: data.reviewer_name,
+        rating: Number(data.rating),
+        comment: data.comment,
+        created_at: typeof data.created_at === "string" ? data.created_at : new Date().toISOString(),
+      };
+    });
 
-    return NextResponse.json({ success: true, reviews: (data ?? []) as ReviewRow[] });
+    return NextResponse.json({ success: true, reviews });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not load reviews.";
+    if (message.includes("NOT_FOUND")) {
+      return NextResponse.json({ success: true, reviews: [] });
+    }
     return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }
@@ -57,17 +69,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: "Rating must be between 1 and 5." }, { status: 400 });
     }
 
-    const supabase = getSupabaseAdminClient();
-    const { error } = await supabase.from("reviews").insert({
+    const db = getFirebaseAdminDb();
+    await db.collection("reviews").add({
       product_id: body.productId,
       reviewer_name: body.reviewerName.trim(),
       rating,
       comment: body.comment.trim(),
+      created_at: new Date().toISOString(),
     });
-
-    if (error) {
-      throw new Error(error.message);
-    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

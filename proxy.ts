@@ -9,6 +9,8 @@ type TenantDomainMapping =
     };
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "edgecommerce.com";
+const ADMIN_SUBDOMAIN = process.env.ADMIN_SUBDOMAIN ?? "admin";
+const RESERVED_SUBDOMAINS = new Set(["www", "api", ADMIN_SUBDOMAIN]);
 
 function normalizeHost(value: string): string {
   return value.trim().toLowerCase().replace(/:\d+$/, "");
@@ -64,7 +66,7 @@ function getTenantFromHost(host: string): { slug: string; tenantId?: string } | 
   }
 
   const subdomain = host.slice(0, -suffix.length);
-  if (!subdomain || subdomain === "www") {
+  if (!subdomain || RESERVED_SUBDOMAINS.has(subdomain)) {
     return null;
   }
 
@@ -73,6 +75,18 @@ function getTenantFromHost(host: string): { slug: string; tenantId?: string } | 
 
 export function proxy(request: NextRequest) {
   const host = getHost(request);
+  const adminHost = `${ADMIN_SUBDOMAIN}.${ROOT_DOMAIN}`;
+
+  if (host === adminHost) {
+    const adminUrl = request.nextUrl.clone();
+    if (adminUrl.pathname === "/") {
+      adminUrl.pathname = "/admin";
+      return NextResponse.rewrite(adminUrl);
+    }
+
+    return NextResponse.next();
+  }
+
   const tenant = getTenantFromHost(host);
 
   if (!tenant) {

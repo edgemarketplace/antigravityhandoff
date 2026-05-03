@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { ProductDetailClient } from "@/components/ProductDetailClient";
 import { Reviews } from "@/components/Reviews";
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { findProductByPrintifyId } from "@/lib/firebase-data";
 
 type ProductPageProps = {
   params: Promise<{ id: string }>;
@@ -47,14 +47,9 @@ function toVariants(value: unknown): CachedVariant[] {
 export default async function ProductPage({ params }: ProductPageProps) {
   const { id } = await params;
 
-  const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select("printify_id,title,description,price,image_url,image_urls,variants")
-    .eq("printify_id", id)
-    .maybeSingle();
+  const data = await findProductByPrintifyId(id);
 
-  if (error || !data) {
+  if (!data) {
     notFound();
   }
 

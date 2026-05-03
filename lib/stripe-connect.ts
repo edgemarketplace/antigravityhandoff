@@ -1,5 +1,5 @@
 import { getStripe } from "@/lib/stripe";
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 
 export const STRIPE_CONNECT_PROVIDER = "stripe_connect";
 
@@ -20,33 +20,32 @@ function resolveAppUrl(): string {
 }
 
 function mapStripeAccountStatus(account: { charges_enabled: boolean; details_submitted: boolean }): string {
-  if (account.charges_enabled && account.details_submitted) {
-    return "active";
-  }
-
+  if (account.charges_enabled && account.details_submitted) return "active";
   return "pending";
 }
 
 export async function getLatestStripeConnectAccountRecord(tenantId: string): Promise<PaymentAccountRecord | null> {
-  const supabase = getSupabaseAdminClient();
-
-  const { data, error } = await supabase
-    .from("payment_accounts")
-    .select("account_ref,status,metadata")
-    .eq("tenant_id", tenantId)
-    .eq("provider", STRIPE_CONNECT_PROVIDER)
-    .order("created_at", { ascending: false })
+  const db = getFirebaseAdminDb();
+  const snap = await db
+    .collection("payment_accounts")
+    .where("tenant_id", "==", tenantId)
+    .where("provider", "==", STRIPE_CONNECT_PROVIDER)
+    .orderBy("created_at", "desc")
     .limit(1)
-    .maybeSingle();
+    .get();
 
-  if (error || !data) {
-    return null;
-  }
+  if (snap.empty) return null;
+  const data = snap.docs[0].data() as {
+    account_ref?: string;
+    status?: string;
+    metadata?: Record<string, unknown> | null;
+  };
 
+  if (!data.account_ref || !data.status) return null;
   return {
     account_ref: data.account_ref,
     status: data.status,
-    metadata: (data.metadata as Record<string, unknown> | null) ?? null,
+    metadata: data.metadata ?? null,
   };
 }
 
@@ -56,32 +55,30 @@ export async function syncStripeConnectRecord(params: {
   status: string;
   metadata?: Record<string, unknown>;
 }) {
-  const supabase = getSupabaseAdminClient();
+  const db = getFirebaseAdminDb();
+  const now = new Date().toISOString();
+  const docId = `${params.tenantId}_${STRIPE_CONNECT_PROVIDER}_${params.accountId}`;
 
-  const { error } = await supabase.from("payment_accounts").upsert(
-    {
-      tenant_id: params.tenantId,
-      provider: STRIPE_CONNECT_PROVIDER,
-      account_ref: params.accountId,
-      status: params.status,
-      metadata: params.metadata ?? {},
-      updated_at: new Date().toISOString(),
-    },
-    {
-      onConflict: "tenant_id,provider,account_ref",
-    },
-  );
-
-  if (error) {
-    throw new Error(`Could not persist payment account: ${error.message}`);
-  }
+  await db
+    .collection("payment_accounts")
+    .doc(docId)
+    .set(
+      {
+        tenant_id: params.tenantId,
+        provider: STRIPE_CONNECT_PROVIDER,
+        account_ref: params.accountId,
+        status: params.status,
+        metadata: params.metadata ?? {},
+        created_at: now,
+        updated_at: now,
+      },
+      { merge: true },
+    );
 }
 
 export async function getOrCreateStripeConnectAccount(tenant: TenantInput): Promise<string> {
   const existing = await getLatestStripeConnectAccountRecord(tenant.id);
-  if (existing?.account_ref) {
-    return existing.account_ref;
-  }
+  if (existing?.account_ref) return existing.account_ref;
 
   const stripe = getStripe();
   const created = await stripe.accounts.create({
@@ -98,7 +95,6 @@ export async function getOrCreateStripeConnectAccount(tenant: TenantInput): Prom
   });
 
   const status = mapStripeAccountStatus(created);
-
   await syncStripeConnectRecord({
     tenantId: tenant.id,
     accountId: created.id,

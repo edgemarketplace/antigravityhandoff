@@ -1,21 +1,33 @@
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
-import { getSupabaseAuthClient } from "@/lib/supabase-auth";
+import { getFirebaseAdminAuth } from "@/lib/firebase-admin";
+import { findMembership } from "@/lib/firebase-data";
+import type { AdminRole, MembershipRow } from "@/lib/firebase-types";
 
 export const ADMIN_READ_ROLES = ["owner", "admin", "staff"] as const;
 export const ADMIN_WRITE_ROLES = ["owner", "admin"] as const;
-
-export type AdminRole = (typeof ADMIN_READ_ROLES)[number];
-
-type MembershipRow = {
-  tenant_id: string;
-  user_id: string;
-  role: AdminRole;
-};
 
 type AuthenticatedUser = {
   id: string;
   email: string | null;
 };
+
+function getSuperAdminEmails(): Set<string> {
+  const raw = process.env.SUPER_ADMIN_EMAILS ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+export function isSuperAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return getSuperAdminEmails().has(email.toLowerCase());
+}
+
+function isSuperAdminUser(user: AuthenticatedUser): boolean {
+  return isSuperAdminEmail(user.email);
+}
 
 export type TenantMembershipResult =
   | {
@@ -52,33 +64,6 @@ function parseCookieHeader(cookieHeader: string | null): Map<string, string> {
   return cookieMap;
 }
 
-function extractAccessTokenFromAuthCookie(cookieValue: string): string | null {
-  const decoded = decodeURIComponent(cookieValue);
-
-  try {
-    const parsed = JSON.parse(decoded) as unknown;
-
-    if (Array.isArray(parsed) && typeof parsed[0] === "string" && parsed[0].length > 0) {
-      return parsed[0];
-    }
-
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      "access_token" in parsed &&
-      typeof (parsed as { access_token?: unknown }).access_token === "string"
-    ) {
-      return (parsed as { access_token: string }).access_token;
-    }
-  } catch {
-    if (decoded.length > 0) {
-      return decoded;
-    }
-  }
-
-  return null;
-}
-
 function getAccessTokenFromRequest(request: Request): string | null {
   const authHeader = request.headers.get("authorization");
   if (authHeader?.toLowerCase().startsWith("bearer ")) {
@@ -88,20 +73,14 @@ function getAccessTokenFromRequest(request: Request): string | null {
 
   const cookies = parseCookieHeader(request.headers.get("cookie"));
 
-  const directToken = cookies.get("sb-access-token") ?? cookies.get("supabase-access-token");
-  if (directToken) {
-    const token = decodeURIComponent(directToken);
-    if (token) return token;
+  const cookieToken =
+    cookies.get("firebase-id-token") ?? cookies.get("__session") ?? cookies.get("token") ?? cookies.get("auth_token");
+
+  if (!cookieToken) {
+    return null;
   }
 
-  for (const [name, value] of cookies.entries()) {
-    if (!name.endsWith("-auth-token")) continue;
-
-    const token = extractAccessTokenFromAuthCookie(value);
-    if (token) return token;
-  }
-
-  return null;
+  return decodeURIComponent(cookieToken).trim() || null;
 }
 
 export async function getAuthenticatedUserFromRequest(request: Request): Promise<AuthenticatedUser | null> {
@@ -110,17 +89,15 @@ export async function getAuthenticatedUserFromRequest(request: Request): Promise
     return null;
   }
 
-  const supabaseAuth = getSupabaseAuthClient();
-  const { data, error } = await supabaseAuth.auth.getUser(accessToken);
-
-  if (error || !data.user) {
+  try {
+    const decoded = await getFirebaseAdminAuth().verifyIdToken(accessToken, true);
+    return {
+      id: decoded.uid,
+      email: typeof decoded.email === "string" ? decoded.email : null,
+    };
+  } catch {
     return null;
   }
-
-  return {
-    id: data.user.id,
-    email: data.user.email ?? null,
-  };
 }
 
 export async function requireTenantMembership(
@@ -138,15 +115,21 @@ export async function requireTenantMembership(
     };
   }
 
-  const supabaseAdmin = getSupabaseAdminClient();
-  const { data, error } = await supabaseAdmin
-    .from("members")
-    .select("tenant_id,user_id,role")
-    .eq("tenant_id", tenantId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  if (isSuperAdminUser(user)) {
+    return {
+      ok: true,
+      user,
+      membership: {
+        tenant_id: tenantId,
+        user_id: user.id,
+        role: "owner",
+      },
+    };
+  }
 
-  if (error || !data) {
+  const membership = await findMembership(tenantId, user.id);
+
+  if (!membership) {
     return {
       ok: false,
       status: 403,
@@ -154,7 +137,6 @@ export async function requireTenantMembership(
     };
   }
 
-  const membership = data as MembershipRow;
   if (!allowedRoles.includes(membership.role)) {
     return {
       ok: false,
